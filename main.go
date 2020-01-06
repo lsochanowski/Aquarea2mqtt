@@ -114,7 +114,7 @@ func main() {
 	MqttKeepalive = time.Second * time.Duration(config.MqttKeepalive)
 	cookieJar, _ := cookiejar.New(nil)
 
-	///SHIT DO WYJEBANIA
+	///SHIT DO WYJEBANIA - do testow write
 	var cookies []*http.Cookie
 	cookies = append(cookies, &http.Cookie{Name: "operationDeviceTop", Value: "1"})
 	curl, _ := url.Parse("https://aquarea-smart.panasonic.com")
@@ -180,6 +180,7 @@ func main() {
 
 }
 
+// funkcja tylko do testow writow
 func TestSetRedirect(client http.Client, eu Enduser) {
 
 	resp, err := client.Get(AquareaServiceCloudURL + "enduser/confirmStep1Policy")
