@@ -7,20 +7,61 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os"
 	"regexp"
 	"strings"
 	"time"
 
+	"github.com/BurntSushi/toml"
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-var AquareaServiceCloudURL string = "https://aquarea-service.panasonic.com/"
-var AquareaSmartCloudURL string = "https://aquarea-smart.panasonic.com/"
-
+var AquareaServiceCloudURL string
+var AquareaSmartCloudURL string
+var AquareaServiceCloudLogin string
+var AquareaServiceCloudPassword string
+var AquateaTimeout time.Duration
+var MqttServer string
+var MqttPort string
+var MqttLogin string
+var MqttPass string
+var MqttClientID string
+var MqttKeepalive time.Duration
 var Shiesuahruefutohkun string
+var LastChecksum [16]byte
+
+type Config struct {
+	AquareaServiceCloudURL      string
+	AquareaSmartCloudURL        string
+	AquareaServiceCloudLogin    string
+	AquareaServiceCloudPassword string
+	AquateaTimeout              int
+	MqttServer                  string
+	MqttPort                    string
+	MqttLogin                   string
+	MqttPass                    string
+	MqttClientID                string
+	MqttKeepalive               int
+}
+
+func ReadConfig() Config {
+	var configfile = "config"
+	_, err := os.Stat(configfile)
+	if err != nil {
+		log.Fatal("Config file is missing: ", configfile)
+	}
+
+	var config Config
+	if _, err := toml.DecodeFile(configfile, &config); err != nil {
+		log.Fatal(err)
+	}
+	//log.Print(config.Index)
+	return config
+}
 
 type ExtractedData struct {
 	EnduserID                         string
@@ -58,11 +99,27 @@ type ExtractedData struct {
 }
 
 func main() {
+
+	var config = ReadConfig()
+	AquareaServiceCloudURL = config.AquareaServiceCloudURL
+	AquareaSmartCloudURL = config.AquareaSmartCloudURL
+	AquareaServiceCloudLogin = config.AquareaServiceCloudLogin
+	AquareaServiceCloudPassword = config.AquareaServiceCloudPassword
+	AquateaTimeout = time.Second * time.Duration(config.AquateaTimeout)
+	MqttServer = config.MqttServer
+	MqttPort = config.MqttPort
+	MqttLogin = config.MqttLogin
+	MqttPass = config.MqttPass
+	MqttClientID = config.MqttClientID
+	MqttKeepalive = time.Second * time.Duration(config.MqttKeepalive)
 	cookieJar, _ := cookiejar.New(nil)
+
+	///SHIT DO WYJEBANIA
 	var cookies []*http.Cookie
 	cookies = append(cookies, &http.Cookie{Name: "operationDeviceTop", Value: "1"})
 	curl, _ := url.Parse("https://aquarea-smart.panasonic.com")
 	cookieJar.SetCookies(curl, cookies)
+	////
 
 	client := http.Client{
 		Jar:     cookieJar,
