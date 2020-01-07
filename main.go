@@ -3,11 +3,13 @@ package main
 import (
 	"bytes"
 	"crypto/md5"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -99,6 +101,9 @@ type ExtractedData struct {
 }
 
 func main() {
+	proxyStr := "http://127.0.0.1:8080"
+
+	proxyURL, err := url.Parse(proxyStr)
 
 	var config = ReadConfig()
 	AquareaServiceCloudURL = config.AquareaServiceCloudURL
@@ -114,19 +119,13 @@ func main() {
 	MqttKeepalive = time.Second * time.Duration(config.MqttKeepalive)
 	cookieJar, _ := cookiejar.New(nil)
 
-	///SHIT DO WYJEBANIA - do testow write
-	var cookies []*http.Cookie
-	cookies = append(cookies, &http.Cookie{Name: "operationDeviceTop", Value: "1"})
-	curl, _ := url.Parse("https://aquarea-smart.panasonic.com")
-	cookieJar.SetCookies(curl, cookies)
-	////
-
 	client := http.Client{
-		Jar:     cookieJar,
-		Timeout: AquateaTimeout,
+		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Jar:       cookieJar,
+		Timeout:   AquateaTimeout,
 	}
 	MC, MT := MakeMQTTConn()
-	err := GetFirstShiesuahruefutohkun(client)
+	err = GetFirstShiesuahruefutohkun(client)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -158,11 +157,9 @@ func main() {
 				fmt.Printf("%s - ", U)
 				md5 := md5.Sum([]byte(fmt.Sprintf("%s", U)))
 				fmt.Printf("%x\n", md5)
-				fmt.Println("\n\n", cookieJar, "\n\n")
 
-				TestSetRedirect(client, SelectedEndUser)
-				fmt.Println("\n\n", cookieJar, "\n\n")
-
+				//				TestSetRedirect(client, SelectedEndUser)
+				go RandomSetTemp(client, SelectedEndUser)
 				if md5 != LastChecksum {
 					PublishStates(MC, MT, U)
 					LastChecksum = md5
@@ -180,96 +177,93 @@ func main() {
 
 }
 
+func RandomSetTemp(client http.Client, eu Enduser) {
+	for {
+		time.Sleep(time.Duration(rand.Intn(6)) * time.Second)
+		fmt.Println("\nrandomowo ustawilem temperature na 23 i status jest : ", SetUserOption(client, eu, MakeChangeHeatingTemperatureJSON(eu, 1, 23)), "\n")
+	}
+
+}
+
 // funkcja tylko do testow writow
-func TestSetRedirect(client http.Client, eu Enduser) {
+func SetUserOption(client http.Client, eu Enduser, payload string) error {
+	var AQCSR AquareaServiceCloudSSOReponse
 
-	resp, err := client.Get(AquareaServiceCloudURL + "enduser/confirmStep1Policy")
-
-	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
-	fmt.Println(string(body))
-
-	LoginURL := AquareaServiceCloudURL + "/enduser/api/request/create/sso"
-	resp, err = client.PostForm(LoginURL, url.Values{
+	_, err := client.Get(AquareaServiceCloudURL + "enduser/confirmStep1Policy")
+	CreateSSOUrl := AquareaServiceCloudURL + "/enduser/api/request/create/sso"
+	resp, err := client.PostForm(CreateSSOUrl, url.Values{
 		"var.gwUid":           {eu.GwUID},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
 	})
-	if err != nil {
-		fmt.Println(err)
-		return
-
-	}
-	body, err = ioutil.ReadAll(resp.Body)
-	var AQCSR AquareaServiceCloudSSOReponse
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
 	err = json.Unmarshal(body, &AQCSR)
-	if err != nil {
-		return
-
-	}
-	resp.Body.Close()
-	fmt.Println(AQCSR.SsoKey, eu.DeviceID, eu.Gwid)
-
-	LoginURL = "https://aquarea-smart.panasonic.com/remote/v1/api/auth/sso"
-	resp, err = client.PostForm(LoginURL, url.Values{
+	leadInstallerStep1url := AquareaSmartCloudURL + "/remote/leadInstallerStep1"
+	_, err = client.PostForm(leadInstallerStep1url, url.Values{
+		"var.keyCode": {AQCSR.SsoKey},
+	})
+	ClaimSSOurl := AquareaSmartCloudURL + "/remote/v1/api/auth/sso"
+	_, err = client.PostForm(ClaimSSOurl, url.Values{
 		"var.ssoKey": {AQCSR.SsoKey},
 	})
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	body2, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Println(err)
-		return
-	}
-	fmt.Println(string(body2))
+	a2wStatusDisplayurl := AquareaSmartCloudURL + "/remote/a2wStatusDisplay"
+	_, err = client.PostForm(a2wStatusDisplayurl, url.Values{})
+	_, err = client.Get(AquareaSmartCloudURL + "/service-worker.js")
+	url := AquareaSmartCloudURL + "/remote/v1/api/devices/" + eu.DeviceID
 
-	url := "https://aquarea-smart.panasonic.com/remote/v1/api/devices/008007B767718332001434545313831373030634345373130434345373138313931304300000000"
-	fmt.Println("URL:>", url)
-
-	var jsonStr = []byte(`{"status":[{"deviceGuid":"008007B767718332001434545313831373030634345373130434345373138313931304300000000","zoneStatus":[{"zoneId":1,"heatSet":25}]}]}`)
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonStr))
+	//var jsonStr = []byte(`{"status":[{"deviceGuid":"008007B767718332001434545313831373030634345373130434345373138313931304300000000","zoneStatus":[{"zoneId":1,"heatSet":25}]}]}`)
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(payload)))
+	req.Header.Set("Referer", AquareaSmartCloudURL+"/remote/a2wControl")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.9,pl;q=0.8,zh;q=0.7")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("X-Requested-With", "XMLHttpRequest")
+	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
+	req.Header.Set("Origin", AquareaSmartCloudURL)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err = client.Do(req)
 	if err != nil {
-		panic(err)
+		fmt.Println(err)
+		return err
 	}
-	defer resp.Body.Close()
 
-	fmt.Println("response Status:", resp.Status)
-	fmt.Println("response Headers:", resp.Header)
-	body, _ = ioutil.ReadAll(resp.Body)
-	fmt.Println("response Body:", string(body))
+	if resp.StatusCode != 200 {
+		return errors.New(http.StatusText(resp.StatusCode))
+	}
+	return nil
 
 }
 
-// func ProcASC() {
-// 	url := "https://aquarea-smart.panasonic.com/remote/v1/api/auth/sso"
-// 	req, err := http.NewRequest("POST", url, nil)
-// 	if err != nil {
-// 			return
-// 	}
+func MakeChangeHeatingTemperatureJSON(eu Enduser, zoneid int, setpoint int) string {
+	var SetParam SetParam
+	var ZS ZoneStatus
+	ZS.HeatSet = setpoint
+	ZS.ZoneID = zoneid
+	ZST := []ZoneStatus{ZS}
+	var ZSS SPStatus
+	ZSS.DeviceGUID = eu.DeviceID
+	ZSS.ZoneStatus = ZST
+	SPS := []SPStatus{ZSS}
+	SetParam.Status = SPS
 
-// 	req.AddCookie(&http.Cookie{Name: "ds_user_id", Value: ds_user_id})
-// 	req.AddCookie(&http.Cookie{Name: "sessionid", Value: sessionid})
-// 	req.AddCookie(&http.Cookie{Name: "csrftoken", Value: csrftoken})
+	PAYLOAD, err := json.Marshal(SetParam)
+	if err != nil {
+		return "ERR"
+	}
+	return string(PAYLOAD)
+}
 
-// 	client := &http.Client{}
-// 	resp, err := client.Do(req)
-// 	if err != nil {
-// 			return
-// 	}
-// 	defer resp.Body.Close()
-
-// 	if resp.StatusCode != 200 {
-// 			err = errors.New(url +
-// 					"\nresp.StatusCode: " + strconv.Itoa(resp.StatusCode))
-// 			return
-// 	}
-
-// 	return ioutil.ReadAll(resp.Body)
-// }
+type SetParam struct {
+	Status []SPStatus `json:"status"`
+}
+type ZoneStatus struct {
+	ZoneID  int `json:"zoneId"`
+	HeatSet int `json:"heatSet"`
+}
+type SPStatus struct {
+	DeviceGUID string       `json:"deviceGuid"`
+	ZoneStatus []ZoneStatus `json:"zoneStatus"`
+}
 
 type AquareaServiceCloudSSOReponse struct {
 	SsoKey    string `json:"ssoKey"`
