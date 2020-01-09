@@ -179,7 +179,7 @@ func main() {
 
 func RandomSetTemp(client http.Client, eu Enduser) {
 	for {
-		time.Sleep(time.Duration(rand.Intn(6)) * time.Second)
+		time.Sleep(time.Duration(rand.Intn(69)) * time.Second)
 		fmt.Println("\nrandomowo ustawilem temperature na 23 i status jest : ", SetUserOption(client, eu, MakeChangeHeatingTemperatureJSON(eu, 1, 23)), "\n")
 	}
 
