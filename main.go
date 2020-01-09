@@ -159,7 +159,6 @@ func main() {
 				md5 := md5.Sum([]byte(fmt.Sprintf("%s", U)))
 				fmt.Printf("%x\n", md5)
 
-				//				TestSetRedirect(client, SelectedEndUser)
 				//	go RandomSetTemp(client, SelectedEndUser)
 				if md5 != LastChecksum {
 					PublishStates(MC, MT, U)
