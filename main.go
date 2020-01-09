@@ -101,9 +101,9 @@ type ExtractedData struct {
 }
 
 func main() {
-	proxyStr := "http://127.0.0.1:8080"
+	//proxyStr := "http://127.0.0.1:8080"
 
-	proxyURL, err := url.Parse(proxyStr)
+	//proxyURL, err := url.Parse(proxyStr)
 
 	var config = ReadConfig()
 	AquareaServiceCloudURL = config.AquareaServiceCloudURL
@@ -120,12 +120,13 @@ func main() {
 	cookieJar, _ := cookiejar.New(nil)
 
 	client := http.Client{
-		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		//		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 		Jar:       cookieJar,
 		Timeout:   AquateaTimeout,
 	}
 	MC, MT := MakeMQTTConn()
-	err = GetFirstShiesuahruefutohkun(client)
+	err := GetFirstShiesuahruefutohkun(client)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -159,7 +160,7 @@ func main() {
 				fmt.Printf("%x\n", md5)
 
 				//				TestSetRedirect(client, SelectedEndUser)
-				go RandomSetTemp(client, SelectedEndUser)
+				//	go RandomSetTemp(client, SelectedEndUser)
 				if md5 != LastChecksum {
 					PublishStates(MC, MT, U)
 					LastChecksum = md5
