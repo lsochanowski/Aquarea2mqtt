@@ -71,11 +71,11 @@ type ExtractedData struct {
 	WorkingMode                       string
 	WaterInleet                       string
 	WaterOutleet                      string
-	Zone1ActualAirTemperature         string
-	Zone1SetpointAirTemperature       string
+	Zone1ActualTemperature            string
+	Zone1SetpointTemperature          string
 	Zone1WaterTemperature             string
-	Zone2ActualAirTemperature         string
-	Zone2SetpointAirTemperature       string
+	Zone2ActualTemperature            string
+	Zone2SetpointTemperature          string
 	Zone2WaterTemperature             string
 	DailyWaterTankActualTemperature   string
 	DailyWaterTankSetpointTemperature string
@@ -350,11 +350,11 @@ func ParseAQData(SelectedEndUser Enduser, client http.Client, aqdict map[string]
 	ED.WorkingMode = TranslateCodeToString(client, r.StatusDataInfo.FunctionStatusText007.TextValue)
 	ED.WaterInleet = r.StatusDataInfo.FunctionStatusText009.Value
 	ED.WaterOutleet = r.StatusDataInfo.FunctionStatusText011.Value
-	ED.Zone1ActualAirTemperature = r.StatusDataInfo.FunctionStatusText013.Value
-	ED.Zone1SetpointAirTemperature = r.StatusDataInfo.FunctionStatusText015.Value
+	ED.Zone1ActualTemperature = r.StatusDataInfo.FunctionStatusText013.Value
+	ED.Zone1SetpointTemperature = r.StatusDataInfo.FunctionStatusText015.Value
 	ED.Zone1WaterTemperature = r.StatusDataInfo.FunctionStatusText017.Value
-	ED.Zone2ActualAirTemperature = r.StatusDataInfo.FunctionStatusText019.Value
-	ED.Zone2SetpointAirTemperature = r.StatusDataInfo.FunctionStatusText021.Value
+	ED.Zone2ActualTemperature = r.StatusDataInfo.FunctionStatusText019.Value
+	ED.Zone2SetpointTemperature = r.StatusDataInfo.FunctionStatusText021.Value
 	ED.Zone2WaterTemperature = r.StatusDataInfo.FunctionStatusText023.Value
 	ED.DailyWaterTankActualTemperature = r.StatusDataInfo.FunctionStatusText025.Value
 	ED.DailyWaterTankSetpointTemperature = r.StatusDataInfo.FunctionStatusText027.Value
