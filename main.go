@@ -126,23 +126,29 @@ func main() {
 		Timeout:   AquateaTimeout,
 	}
 	MC, MT := MakeMQTTConn()
+	for {
+		GetAQData(client, MC, MT)
+	}
+}
+
+func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
 	err := GetFirstShiesuahruefutohkun(client)
 	if err != nil {
 		fmt.Println(err)
-		return
+		return false
 	}
 
 	err = GetLogin(client)
 	if err != nil {
 		fmt.Println(err)
 
-		return
+		return false
 	}
 	err, EU, aqdict := GetInstallerHome(client)
 	if err != nil {
 		fmt.Println(err)
 
-		return
+		return false
 	}
 	for {
 
@@ -151,6 +157,7 @@ func main() {
 				e, U := ParseAQData(SelectedEndUser, client, aqdict)
 				if e != nil {
 					fmt.Println(e)
+					return false
 					break
 
 				}
@@ -159,7 +166,7 @@ func main() {
 				md5 := md5.Sum([]byte(fmt.Sprintf("%s", U)))
 				fmt.Printf("%x\n", md5)
 
-				//	go RandomSetTemp(client, SelectedEndUser)
+				//		go RandomSetTemp(client, SelectedEndUser)
 				if md5 != LastChecksum {
 					PublishStates(MC, MT, U)
 					LastChecksum = md5
@@ -174,13 +181,13 @@ func main() {
 		time.Sleep(2 * time.Second)
 
 	}
-
+	return true
 }
 
 func RandomSetTemp(client http.Client, eu Enduser) {
 	for {
-		time.Sleep(time.Duration(rand.Intn(69)) * time.Second)
-		fmt.Println("\nrandomowo ustawilem temperature na 23 i status jest : ", SetUserOption(client, eu, MakeChangeHeatingTemperatureJSON(eu, 1, 23)), "\n")
+		time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
+		fmt.Println("\nrandomowo ustawilem temperature na 23 i status jest : ", SetUserOption(client, eu, MakeChangeHeatingTemperatureJSON(eu, 1, 1)), "\n")
 	}
 
 }
@@ -370,6 +377,12 @@ func ParseAQData(SelectedEndUser Enduser, client http.Client, aqdict map[string]
 	ED.RoomHeaterPerformance = r.StatusDataInfo.FunctionStatusText063.Value
 	ED.RoomHeaterRunTime = r.StatusDataInfo.FunctionStatusText065.Value
 	ED.DailyWaterHeaterRunTime = r.StatusDataInfo.FunctionStatusText068.Value
+	if ED.RunCount == "-" {
+		err = errors.New("Dane Wygladaja na BEZ TRESCI")
+	}
+	//fmt.Println("\n CODE: ", r.ErrorCode, "\n")
+	//fmt.Println("\n BODY: ", r, "\n")
+
 	return err, ED
 }
 
