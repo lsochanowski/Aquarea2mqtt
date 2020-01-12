@@ -22,16 +22,10 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-var AquareaSmartCloudURL string
-var AquareaServiceCloudLogin string
-var AquareaServiceCloudPassword string
 var AquateaTimeout time.Duration
-var MqttServer string
-var MqttPort string
-var MqttLogin string
-var MqttPass string
-var MqttClientID string
 var MqttKeepalive time.Duration
+var PoolInterval time.Duration
+
 var Shiesuahruefutohkun string
 var LastChecksum [16]byte
 
@@ -47,6 +41,7 @@ type Config struct {
 	MqttPass                    string
 	MqttClientID                string
 	MqttKeepalive               int
+	PoolInterval                int
 }
 
 var AQDevices map[string]Enduser
@@ -111,16 +106,10 @@ func main() {
 	AQDevices = make(map[string]Enduser)
 
 	config = ReadConfig()
-	AquareaSmartCloudURL = config.AquareaSmartCloudURL
-	AquareaServiceCloudLogin = config.AquareaServiceCloudLogin
-	AquareaServiceCloudPassword = config.AquareaServiceCloudPassword
 	AquateaTimeout = time.Second * time.Duration(config.AquateaTimeout)
-	MqttServer = config.MqttServer
-	MqttPort = config.MqttPort
-	MqttLogin = config.MqttLogin
-	MqttPass = config.MqttPass
-	MqttClientID = config.MqttClientID
 	MqttKeepalive = time.Second * time.Duration(config.MqttKeepalive)
+	PoolInterval = time.Second * time.Duration(config.PoolInterval)
+
 	cookieJar, _ := cookiejar.New(nil)
 
 	client = http.Client{
@@ -183,7 +172,7 @@ func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
 		} else {
 			fmt.Println(err)
 		}
-		time.Sleep(2 * time.Second)
+		time.Sleep(PoolInterval)
 
 	}
 	return true
@@ -203,27 +192,27 @@ func SetUserOption(client http.Client, eui string, payload string) error {
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	err = json.Unmarshal(body, &AQCSR)
-	leadInstallerStep1url := AquareaSmartCloudURL + "/remote/leadInstallerStep1"
+	leadInstallerStep1url := config.AquareaSmartCloudURL + "/remote/leadInstallerStep1"
 	_, err = client.PostForm(leadInstallerStep1url, url.Values{
 		"var.keyCode": {AQCSR.SsoKey},
 	})
-	ClaimSSOurl := AquareaSmartCloudURL + "/remote/v1/api/auth/sso"
+	ClaimSSOurl := config.AquareaSmartCloudURL + "/remote/v1/api/auth/sso"
 	_, err = client.PostForm(ClaimSSOurl, url.Values{
 		"var.ssoKey": {AQCSR.SsoKey},
 	})
-	a2wStatusDisplayurl := AquareaSmartCloudURL + "/remote/a2wStatusDisplay"
+	a2wStatusDisplayurl := config.AquareaSmartCloudURL + "/remote/a2wStatusDisplay"
 	_, err = client.PostForm(a2wStatusDisplayurl, url.Values{})
-	_, err = client.Get(AquareaSmartCloudURL + "/service-worker.js")
-	url := AquareaSmartCloudURL + "/remote/v1/api/devices/" + eu.DeviceID
+	_, err = client.Get(config.AquareaSmartCloudURL + "/service-worker.js")
+	url := config.AquareaSmartCloudURL + "/remote/v1/api/devices/" + eu.DeviceID
 
 	//var jsonStr = []byte(`{"status":[{"deviceGuid":"008007B767718332001434545313831373030634345373130434345373138313931304300000000","zoneStatus":[{"zoneId":1,"heatSet":25}]}]}`)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(payload)))
-	req.Header.Set("Referer", AquareaSmartCloudURL+"/remote/a2wControl")
+	req.Header.Set("Referer", config.AquareaSmartCloudURL+"/remote/a2wControl")
 	req.Header.Set("Accept-Language", "en-US,en;q=0.9,pl;q=0.8,zh;q=0.7")
 	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
 	req.Header.Set("X-Requested-With", "XMLHttpRequest")
 	req.Header.Set("Accept", "application/json, text/javascript, */*; q=0.01")
-	req.Header.Set("Origin", AquareaSmartCloudURL)
+	req.Header.Set("Origin", config.AquareaSmartCloudURL)
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err = client.Do(req)
@@ -279,10 +268,10 @@ type AquareaServiceCloudSSOReponse struct {
 
 func MakeMQTTConn() (mqtt.Client, mqtt.Token) {
 	opts := mqtt.NewClientOptions()
-	opts.AddBroker(fmt.Sprintf("%s://%s:%s", "tcp", MqttServer, MqttPort))
-	opts.SetPassword(MqttPass)
-	opts.SetUsername(MqttLogin)
-	opts.SetClientID(MqttClientID)
+	opts.AddBroker(fmt.Sprintf("%s://%s:%s", "tcp", config.MqttServer, config.MqttPort))
+	opts.SetPassword(config.MqttPass)
+	opts.SetUsername(config.MqttLogin)
+	opts.SetClientID(config.MqttClientID)
 
 	opts.SetKeepAlive(MqttKeepalive)
 	opts.SetOnConnectHandler(startsub)
@@ -509,9 +498,9 @@ func GetLogin(client http.Client) error {
 
 	var Response LogResponse
 	LoginURL := config.AquareaServiceCloudURL + "/installer/api/auth/login"
-	data := []byte(AquareaServiceCloudLogin + AquareaServiceCloudPassword)
+	data := []byte(config.AquareaServiceCloudLogin + config.AquareaServiceCloudPassword)
 	resp, err := client.PostForm(LoginURL, url.Values{
-		"var.loginId":         {AquareaServiceCloudLogin},
+		"var.loginId":         {config.AquareaServiceCloudLogin},
 		"var.password":        {fmt.Sprintf("%x", md5.Sum(data))},
 		"var.inputOmit":       {"false"},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
