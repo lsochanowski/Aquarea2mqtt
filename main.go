@@ -341,7 +341,7 @@ func PublishStates(mclient mqtt.Client, token mqtt.Token, U ExtractedData) {
 		TOP := "aquarea/state/" + fmt.Sprintf("%s/%s", m["EnduserID"], key)
 		//	fmt.Println("Publikuje do ", TOP, "warosc", value)
 		value = strings.TrimSpace(value)
-
+		value = strings.ToUpper(value)
 		token = mclient.Publish(TOP, byte(0), false, value)
 		if token.Wait() && token.Error() != nil {
 			fmt.Printf("Fail to publish, %v", token.Error())
