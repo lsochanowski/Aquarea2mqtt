@@ -22,7 +22,6 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-var AquareaServiceCloudURL string
 var AquareaSmartCloudURL string
 var AquareaServiceCloudLogin string
 var AquareaServiceCloudPassword string
@@ -103,6 +102,7 @@ type ExtractedData struct {
 }
 
 var client http.Client
+var config Config
 
 func main() {
 	//proxyStr := "http://127.0.0.1:8080"
@@ -110,8 +110,7 @@ func main() {
 	//proxyURL, err := url.Parse(proxyStr)
 	AQDevices = make(map[string]Enduser)
 
-	var config = ReadConfig()
-	AquareaServiceCloudURL = config.AquareaServiceCloudURL
+	config = ReadConfig()
 	AquareaSmartCloudURL = config.AquareaSmartCloudURL
 	AquareaServiceCloudLogin = config.AquareaServiceCloudLogin
 	AquareaServiceCloudPassword = config.AquareaServiceCloudPassword
@@ -195,8 +194,8 @@ func SetUserOption(client http.Client, eui string, payload string) error {
 	eu := AQDevices[eui]
 	var AQCSR AquareaServiceCloudSSOReponse
 
-	_, err := client.Get(AquareaServiceCloudURL + "enduser/confirmStep1Policy")
-	CreateSSOUrl := AquareaServiceCloudURL + "/enduser/api/request/create/sso"
+	_, err := client.Get(config.AquareaServiceCloudURL + "enduser/confirmStep1Policy")
+	CreateSSOUrl := config.AquareaServiceCloudURL + "/enduser/api/request/create/sso"
 	resp, err := client.PostForm(CreateSSOUrl, url.Values{
 		"var.gwUid":           {eu.GwUID},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
@@ -415,7 +414,7 @@ func TranslateCodeToString(client http.Client, source string) string {
 	//	client := http.Client{
 	//		Jar: cookieJar,
 	//	}
-	//	resp, err := client.Get(AquareaServiceCloudURL + "installer/functionStatus")
+	//	resp, err := client.Get(config.AquareaServiceCloudURL + "installer/functionStatus")
 	//	if err != nil {
 	//		return source
 	//	}
@@ -446,7 +445,7 @@ func TranslateCodeToString(client http.Client, source string) string {
 
 func GetFirstShiesuahruefutohkun(client http.Client) error {
 
-	resp, err := client.Get(AquareaServiceCloudURL)
+	resp, err := client.Get(config.AquareaServiceCloudURL)
 	if err != nil {
 		return err
 
@@ -474,7 +473,7 @@ func GetFirstShiesuahruefutohkun(client http.Client) error {
 
 func GetUIShiesuahruefutohkun(client http.Client, eu Enduser) error {
 
-	LoginURL := AquareaServiceCloudURL + "/installer/functionUserInformation"
+	LoginURL := config.AquareaServiceCloudURL + "/installer/functionUserInformation"
 	resp, err := client.PostForm(LoginURL, url.Values{
 		"var.functionSelectedGwUid": {eu.GwUID},
 	})
@@ -509,7 +508,7 @@ func GetUIShiesuahruefutohkun(client http.Client, eu Enduser) error {
 func GetLogin(client http.Client) error {
 
 	var Response LogResponse
-	LoginURL := AquareaServiceCloudURL + "/installer/api/auth/login"
+	LoginURL := config.AquareaServiceCloudURL + "/installer/api/auth/login"
 	data := []byte(AquareaServiceCloudLogin + AquareaServiceCloudPassword)
 	resp, err := client.PostForm(LoginURL, url.Values{
 		"var.loginId":         {AquareaServiceCloudLogin},
@@ -554,7 +553,7 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 	var m map[string]string
 
 	var Shiesuahruefutohkun string
-	resp, err := client.Get(AquareaServiceCloudURL + "installer/home")
+	resp, err := client.Get(config.AquareaServiceCloudURL + "installer/home")
 	if err != nil {
 		return err, EndUsers, m
 
@@ -581,7 +580,7 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 	}
 	resp.Body.Close()
 
-	LoginURL := AquareaServiceCloudURL + "/installer/api/endusers"
+	LoginURL := config.AquareaServiceCloudURL + "/installer/api/endusers"
 	resp, err = client.PostForm(LoginURL, url.Values{
 		"var.name":            {""},
 		"var.deviceId":        {""},
@@ -622,7 +621,7 @@ func GetDeviceInformation(client http.Client, eu Enduser) (error, AquareaStatusR
 
 	var AquareaStatusResponse AquareaStatusResponse
 
-	LoginURL := AquareaServiceCloudURL + "/installer/api/function/status"
+	LoginURL := config.AquareaServiceCloudURL + "/installer/api/function/status"
 	resp, err := client.PostForm(LoginURL, url.Values{
 		"var.deviceId":        {eu.DeviceID},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
