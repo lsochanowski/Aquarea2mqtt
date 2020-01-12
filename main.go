@@ -9,12 +9,12 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"math/rand"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -49,6 +49,8 @@ type Config struct {
 	MqttClientID                string
 	MqttKeepalive               int
 }
+
+var AQDevices map[string]Enduser
 
 func ReadConfig() Config {
 	var configfile = "config"
@@ -100,10 +102,13 @@ type ExtractedData struct {
 	DailyWaterHeaterRunTime           string
 }
 
+var client http.Client
+
 func main() {
 	//proxyStr := "http://127.0.0.1:8080"
 
 	//proxyURL, err := url.Parse(proxyStr)
+	AQDevices = make(map[string]Enduser)
 
 	var config = ReadConfig()
 	AquareaServiceCloudURL = config.AquareaServiceCloudURL
@@ -119,7 +124,7 @@ func main() {
 	MqttKeepalive = time.Second * time.Duration(config.MqttKeepalive)
 	cookieJar, _ := cookiejar.New(nil)
 
-	client := http.Client{
+	client = http.Client{
 		//		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
 		Jar:       cookieJar,
@@ -158,13 +163,14 @@ func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
 				if e != nil {
 					fmt.Println(e)
 					return false
-					break
 
 				}
 				//fmt.Println(U)
 				fmt.Printf("%s - ", U)
 				md5 := md5.Sum([]byte(fmt.Sprintf("%s", U)))
 				fmt.Printf("%x\n", md5)
+
+				AQDevices[SelectedEndUser.Gwid] = SelectedEndUser
 
 				//		go RandomSetTemp(client, SelectedEndUser)
 				if md5 != LastChecksum {
@@ -184,16 +190,9 @@ func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
 	return true
 }
 
-func RandomSetTemp(client http.Client, eu Enduser) {
-	for {
-		time.Sleep(time.Duration(rand.Intn(5)) * time.Second)
-		fmt.Println("\nrandomowo ustawilem temperature na 23 i status jest : ", SetUserOption(client, eu, MakeChangeHeatingTemperatureJSON(eu, 1, 1)), "\n")
-	}
-
-}
-
 // funkcja tylko do testow writow
-func SetUserOption(client http.Client, eu Enduser, payload string) error {
+func SetUserOption(client http.Client, eui string, payload string) error {
+	eu := AQDevices[eui]
 	var AQCSR AquareaServiceCloudSSOReponse
 
 	_, err := client.Get(AquareaServiceCloudURL + "enduser/confirmStep1Policy")
@@ -241,7 +240,9 @@ func SetUserOption(client http.Client, eu Enduser, payload string) error {
 
 }
 
-func MakeChangeHeatingTemperatureJSON(eu Enduser, zoneid int, setpoint int) string {
+func MakeChangeHeatingTemperatureJSON(eui string, zoneid int, setpoint int) string {
+	eu := AQDevices[eui]
+
 	var SetParam SetParam
 	var ZS ZoneStatus
 	ZS.HeatSet = setpoint
@@ -307,12 +308,32 @@ func connLostHandler(c mqtt.Client, err error) {
 }
 
 func startsub(c mqtt.Client) {
-	//c.Subscribe("jablotron/+/+/set", 2, HandleMSGfromMQTT)
+	c.Subscribe("aquarea/+/+/set", 2, HandleMSGfromMQTT)
 
 	//Perform additional action...
 }
 
-func PublishStates(client mqtt.Client, token mqtt.Token, U ExtractedData) {
+func HandleMSGfromMQTT(mclient mqtt.Client, msg mqtt.Message) {
+	s := strings.Split(msg.Topic(), "/")
+	if len(s) > 3 {
+		DeviceID := s[1]
+		Operation := s[2]
+		fmt.Printf("Device ID %s \n Operation %s", DeviceID, Operation)
+		if Operation == "Zone1SetpointTemperature" {
+			i, err := strconv.ParseFloat(string(msg.Payload()), 32)
+			fmt.Printf("i=%d, type: %T\n err: %s", i, i, err)
+			str := MakeChangeHeatingTemperatureJSON(DeviceID, 1, int(i))
+			fmt.Printf("\n %s \n ", str)
+			SetUserOption(client, DeviceID, str)
+
+		}
+	}
+	fmt.Printf("* [%s] %s\n", msg.Topic(), string(msg.Payload()))
+	fmt.Printf(".")
+
+}
+
+func PublishStates(mclient mqtt.Client, token mqtt.Token, U ExtractedData) {
 
 	//literate over struc't a i can't belive there is no better way to do it....
 	jsonData, err := json.Marshal(U)
@@ -333,7 +354,7 @@ func PublishStates(client mqtt.Client, token mqtt.Token, U ExtractedData) {
 		//	fmt.Println("Publikuje do ", TOP, "warosc", value)
 		value = strings.TrimSpace(value)
 
-		token = client.Publish(TOP, byte(0), false, value)
+		token = mclient.Publish(TOP, byte(0), false, value)
 		if token.Wait() && token.Error() != nil {
 			fmt.Printf("Fail to publish, %v", token.Error())
 		}
@@ -575,17 +596,23 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 		"var.readNew":         {"1"},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
 	})
+	if err != nil {
+		return err, EndUsers, m
+	}
 	b, err := ioutil.ReadAll(resp.Body)
-
+	if err != nil {
+		return err, EndUsers, m
+	}
 	err = json.Unmarshal(b, &EndUsersList)
-
+	if err != nil {
+		return err, EndUsers, m
+	}
 	EndUsers = EndUsersList.Endusers
 
 	resp.Body.Close()
 
 	if err != nil {
 		return err, EndUsers, m
-
 	}
 	return nil, EndUsers, m
 
