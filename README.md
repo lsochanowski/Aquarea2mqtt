@@ -92,3 +92,11 @@ sensor:
     unit_of_measurement: '°C'
     state_topic: "aquarea/state/B76<REST OF DEVICE ID>/Zone1WaterTemperature"
 ```
+
+
+TODO:
+	# Test on ServiceCloud  with more than one heatpump
+	# test with heatpump equiped with option board etc
+	# add auto download of dictionary in TranslateCodeToString
+	# general code optymalization and cleaning
+	# writing some other parameters (tank temperature etc) 
