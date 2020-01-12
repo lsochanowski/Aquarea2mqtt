@@ -63,7 +63,7 @@ published topics :
   
   you should know you'r device ID from aquarea service cloud
   
-  
+  (docs/aquareaConfig.png)
   
   home assistant config examples:
   
