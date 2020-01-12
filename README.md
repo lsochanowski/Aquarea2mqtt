@@ -6,6 +6,8 @@ Configuration
 rename config.example to config
 
 values: 
+
+```
 AquareaServiceCloudURL="https://aquarea-service.panasonic.com/" < base URL for aquarea Service Cloud 
 AquareaSmartCloudURL="https://aquarea-smart.panasonic.com/" < base URL for aquarea Smart Cloud
 AquareaServiceCloudLogin="" < Aquarea Service Cloud login !!! it's not the same like for a smart cloud!!
@@ -18,6 +20,8 @@ MqttPass="testpass"
 MqttClientID="aquarea-test-pub"
 MqttKeepalive=60  < in seconds 
 PoolInterval=2 < in seconds 
+```
+
 
 published topics :
 
@@ -63,7 +67,8 @@ published topics :
   
   home assistant config examples:
   
-  
+  ```
+
   climate:
   - platform: mqtt
     name: HeatPumpSetpoint
@@ -86,3 +91,4 @@ sensor:
     name: "HeatPump Zone1WaterTemperature"
     unit_of_measurement: '°C'
     state_topic: "aquarea/state/B76<REST OF DEVICE ID>/Zone1WaterTemperature"
+```
