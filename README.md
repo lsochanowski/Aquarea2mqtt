@@ -95,8 +95,16 @@ sensor:
 
 
 TODO:
-	# Test on ServiceCloud  with more than one heatpump
-	# test with heatpump equiped with option board etc
-	# add auto download of dictionary in TranslateCodeToString
-	# general code optymalization and cleaning
-	# writing some other parameters (tank temperature etc) 
+
+
+
+	- Test on ServiceCloud  with more than one heatpump
+	
+	- test with heatpump equiped with option board etc
+	
+	- add auto download of dictionary in TranslateCodeToString
+	
+	- general code optymalization and cleaning
+	
+	- writing some other parameters (tank temperature etc) 
+	
