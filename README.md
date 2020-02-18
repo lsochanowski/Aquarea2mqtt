@@ -20,6 +20,7 @@ MqttPass="testpass"
 MqttClientID="aquarea-test-pub"
 MqttKeepalive=60  < in seconds 
 PoolInterval=2 < in seconds 
+LogSecOffset=2550 <number of seconds for searching last statistic information from aqwuarea service cloud
 ```
 
 
