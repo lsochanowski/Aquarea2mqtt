@@ -14,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -28,6 +29,7 @@ var PoolInterval time.Duration
 
 var Shiesuahruefutohkun string
 var LastChecksum [16]byte
+var LOGTS int64
 
 type Config struct {
 	AquareaServiceCloudURL      string
@@ -42,6 +44,7 @@ type Config struct {
 	MqttClientID                string
 	MqttKeepalive               int
 	PoolInterval                int
+	LogSecOffset                int64
 }
 
 var AQDevices map[string]Enduser
@@ -100,9 +103,8 @@ var client http.Client
 var config Config
 
 func main() {
-	//proxyStr := "http://127.0.0.1:8080"
-
-	//proxyURL, err := url.Parse(proxyStr)
+	proxyStr := "http://127.0.0.1:8080"
+	proxyURL, _ := url.Parse(proxyStr)
 	AQDevices = make(map[string]Enduser)
 
 	config = ReadConfig()
@@ -113,10 +115,10 @@ func main() {
 	cookieJar, _ := cookiejar.New(nil)
 
 	client = http.Client{
-		//		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-		Jar:       cookieJar,
-		Timeout:   AquateaTimeout,
+		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		//Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Jar:     cookieJar,
+		Timeout: AquateaTimeout,
 	}
 	MC, MT := MakeMQTTConn()
 	for {
@@ -148,6 +150,12 @@ func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
 		if err == nil {
 			for _, SelectedEndUser := range EU {
 				e, U := ParseAQData(SelectedEndUser, client, aqdict)
+				e, curLOGTS, LOGDATA := GetDeviceLogInformation(client, SelectedEndUser)
+				if curLOGTS != LOGTS {
+					PublishLog(MC, MT, LOGDATA, curLOGTS)
+					LOGTS = curLOGTS
+				}
+
 				if e != nil {
 					fmt.Println(e)
 					return false
@@ -346,6 +354,29 @@ func PublishStates(mclient mqtt.Client, token mqtt.Token, U ExtractedData) {
 		if token.Wait() && token.Error() != nil {
 			fmt.Printf("Fail to publish, %v", token.Error())
 		}
+	}
+
+}
+
+func PublishLog(mclient mqtt.Client, token mqtt.Token, LD []string, TS int64) {
+	TSS := fmt.Sprintf("%d", TS)
+	for key, value := range LD {
+		//	fmt.Println("\n", "Key:", key, "Value:", value, "\n")
+		TOP := "aquarea/log/" + fmt.Sprintf("%d", key)
+		fmt.Println("Publikuje do ", TOP, "warosc", value)
+		value = strings.TrimSpace(value)
+		value = strings.ToUpper(value)
+		token = mclient.Publish(TOP, byte(0), false, value)
+		if token.Wait() && token.Error() != nil {
+			fmt.Printf("Fail to publish, %v", token.Error())
+		}
+	}
+	//	fmt.Println("\n", "Key:", key, "Value:", value, "\n")
+	TOP := "aquarea/log/LastUpdated"
+	fmt.Println("Publikuje do ", TOP, "warosc", TSS)
+	token = mclient.Publish(TOP, byte(0), false, TSS)
+	if token.Wait() && token.Error() != nil {
+		fmt.Printf("Fail to publish, %v", token.Error())
 	}
 
 }
@@ -638,6 +669,69 @@ func GetDeviceInformation(client http.Client, eu Enduser) (error, AquareaStatusR
 
 	}
 	return nil, AquareaStatusResponse
+}
+
+type AQLogData struct {
+	ErrorHistory []struct {
+		ErrorCode string `json:"errorCode"`
+		ErrorDate int64  `json:"errorDate"`
+	} `json:"errorHistory"`
+	LogData         string `json:"logData"`
+	ErrorCode       int    `json:"errorCode"`
+	RecordingStatus int    `json:"recordingStatus"`
+	HistoryNo       string `json:"historyNo"`
+}
+
+func GetDeviceLogInformation(client http.Client, eu Enduser) (error, int64, []string) {
+	var respo []string
+	var AQLogData AQLogData
+	sec := time.Now().Unix() // number of seconds since January 1, 1970 UTC
+	lsec := sec - config.LogSecOffset
+	ValueList := "{\"logItems\":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70]}"
+	LoginURL := config.AquareaServiceCloudURL + "/installer/api/data/log"
+	resp, err := client.PostForm(LoginURL, url.Values{
+		"var.deviceId":        {eu.DeviceID},
+		"shiesuahruefutohkun": {Shiesuahruefutohkun},
+		"var.target":          {"0"},
+		"var.startDate":       {fmt.Sprintf("%d000", lsec)},
+		"var.logItems":        {ValueList},
+	})
+	if err != nil {
+		return err, sec, respo
+
+	}
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		return err, sec, respo
+
+	}
+	err = json.Unmarshal(b, &AQLogData)
+	var anything map[int64][]string
+	err = json.Unmarshal([]byte(AQLogData.LogData), &anything)
+	if len(anything) < 1 {
+		return nil, sec, respo
+
+	}
+	keys := make([]int64, 0, len(anything))
+	for k := range anything {
+		keys = append(keys, k)
+	}
+	//sort.Ints(keys)
+	sort.Slice(keys, func(i, j int) bool { return keys[i] < keys[j] })
+
+	lastkey := len(keys) - 1
+
+	//fmt.Println(keys, "\n")
+	//fmt.Println(keys[lastkey])
+
+	respo = anything[keys[lastkey]]
+	resp.Body.Close()
+
+	if err != nil {
+		return err, sec, respo
+
+	}
+	return nil, keys[lastkey], respo
 }
 
 type EndUsersList struct {
