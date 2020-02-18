@@ -10,3 +10,4 @@ MqttPass="testpass"
 MqttClientID="aquarea-test-pub"
 MqttKeepalive=60
 PoolInterval=2
+LogSecOffset=2550
