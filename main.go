@@ -103,8 +103,8 @@ var client http.Client
 var config Config
 
 func main() {
-	proxyStr := "http://127.0.0.1:8080"
-	proxyURL, _ := url.Parse(proxyStr)
+	//	proxyStr := "http://127.0.0.1:8080"
+	//	proxyURL, _ := url.Parse(proxyStr)
 	AQDevices = make(map[string]Enduser)
 
 	config = ReadConfig()
@@ -115,10 +115,10 @@ func main() {
 	cookieJar, _ := cookiejar.New(nil)
 
 	client = http.Client{
-		Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-		//Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
-		Jar:     cookieJar,
-		Timeout: AquateaTimeout,
+		//Transport: &http.Transport{Proxy: http.ProxyURL(proxyURL), TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}},
+		Jar:       cookieJar,
+		Timeout:   AquateaTimeout,
 	}
 	MC, MT := MakeMQTTConn()
 	for {
