@@ -127,6 +127,7 @@ func main() {
 }
 
 func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
+
 	err := GetFirstShiesuahruefutohkun(client)
 	if err != nil {
 		fmt.Println(err)
@@ -136,12 +137,17 @@ func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
 	err = GetLogin(client)
 	if err != nil {
 		fmt.Println(err)
+		fmt.Println("drugi")
 
 		return false
 	}
+
 	err, EU, aqdict := GetInstallerHome(client)
+	fmt.Println("trzeci")
+
 	if err != nil {
 		fmt.Println(err)
+		fmt.Println("czwarty")
 
 		return false
 	}
@@ -150,6 +156,8 @@ func GetAQData(client http.Client, MC mqtt.Client, MT mqtt.Token) bool {
 		if err == nil {
 			for _, SelectedEndUser := range EU {
 				e, U := ParseAQData(SelectedEndUser, client, aqdict)
+				fmt.Println("piaty")
+
 				e, curLOGTS, LOGDATA := GetDeviceLogInformation(client, SelectedEndUser)
 				if curLOGTS != LOGTS {
 					PublishLog(MC, MT, LOGDATA, curLOGTS)
@@ -193,23 +201,28 @@ func SetUserOption(client http.Client, eui string, payload string) error {
 
 	_, err := client.Get(config.AquareaServiceCloudURL + "enduser/confirmStep1Policy")
 	CreateSSOUrl := config.AquareaServiceCloudURL + "/enduser/api/request/create/sso"
-	resp, err := client.PostForm(CreateSSOUrl, url.Values{
+	uv := url.Values{
 		"var.gwUid":           {eu.GwUID},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
-	})
+	}
+	resp, err := PostREQ(CreateSSOUrl, client, uv)
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
 	err = json.Unmarshal(body, &AQCSR)
+	fmt.Println(err, body)
 	leadInstallerStep1url := config.AquareaSmartCloudURL + "/remote/leadInstallerStep1"
-	_, err = client.PostForm(leadInstallerStep1url, url.Values{
+	uv = url.Values{
 		"var.keyCode": {AQCSR.SsoKey},
-	})
+	}
+	_, err = PostREQ(leadInstallerStep1url, client, uv)
 	ClaimSSOurl := config.AquareaSmartCloudURL + "/remote/v1/api/auth/sso"
-	_, err = client.PostForm(ClaimSSOurl, url.Values{
+	uv = url.Values{
 		"var.ssoKey": {AQCSR.SsoKey},
-	})
+	}
+	_, err = PostREQ(ClaimSSOurl, client, uv)
 	a2wStatusDisplayurl := config.AquareaSmartCloudURL + "/remote/a2wStatusDisplay"
-	_, err = client.PostForm(a2wStatusDisplayurl, url.Values{})
+	uv = url.Values{}
+	_, err = PostREQ(a2wStatusDisplayurl, client, uv)
 	_, err = client.Get(config.AquareaSmartCloudURL + "/service-worker.js")
 	url := config.AquareaSmartCloudURL + "/remote/v1/api/devices/" + eu.DeviceID
 
@@ -340,7 +353,7 @@ func PublishStates(mclient mqtt.Client, token mqtt.Token, U ExtractedData) {
 	var m map[string]string
 	err = json.Unmarshal([]byte(jsonData), &m)
 	if err != nil {
-		fmt.Println("BLAD:", err)
+		fmt.Println("BLAD:", err, jsonData)
 		return
 	}
 
@@ -454,7 +467,7 @@ func TranslateCodeToString(client http.Client, source string) string {
 
 	err := json.Unmarshal([]byte(aqdict), &m)
 	if err != nil {
-		fmt.Println("BLAD:", err)
+		fmt.Println("BLAD:", err, aqdict)
 		return source
 	}
 	if _, found := m[source]; !found {
@@ -464,21 +477,37 @@ func TranslateCodeToString(client http.Client, source string) string {
 }
 
 func GetFirstShiesuahruefutohkun(client http.Client) error {
-
-	resp, err := client.Get(config.AquareaServiceCloudURL)
+	fmt.Println("START")
+	req, err := http.NewRequest("GET", config.AquareaServiceCloudURL, nil)
 	if err != nil {
+		log.Fatal("Error reading request. ", err)
+	}
+
+	req.Header.Set("Cache-Control", "max-age=0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Encoding", "gzip, deflate, br")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+
+	resp, err := client.Do(req)
+
+	if err != nil {
+
 		return err
 
 	}
 	defer resp.Body.Close()
 	body, err := ioutil.ReadAll(resp.Body)
+	fmt.Println("stop")
 
 	re, err := regexp.Compile(`const shiesuahruefutohkun = '(.+)'`)
 	ss := re.FindStringSubmatch(string(body))
+
 	if len(ss) > 0 {
 		Shiesuahruefutohkun = ss[1]
 
 	} else {
+
 		return err
 
 	}
@@ -494,9 +523,10 @@ func GetFirstShiesuahruefutohkun(client http.Client) error {
 func GetUIShiesuahruefutohkun(client http.Client, eu Enduser) error {
 
 	LoginURL := config.AquareaServiceCloudURL + "/installer/functionUserInformation"
-	resp, err := client.PostForm(LoginURL, url.Values{
+	uv := url.Values{
 		"var.functionSelectedGwUid": {eu.GwUID},
-	})
+	}
+	resp, err := PostREQ(LoginURL, client, uv)
 	if err != nil {
 		return err
 
@@ -525,36 +555,64 @@ func GetUIShiesuahruefutohkun(client http.Client, eu Enduser) error {
 
 }
 
+type GetLoginStruct struct {
+	AgreementStatus struct {
+		Contract      bool `json:"contract"`
+		CookiePolicy  bool `json:"cookiePolicy"`
+		PrivacyPolicy bool `json:"privacyPolicy"`
+	} `json:"agreementStatus"`
+	ErrorCode int `json:"errorCode"`
+}
+
+func PostREQ(LoginURL string, client http.Client, uv url.Values) (*http.Response, error) {
+	req, err := http.NewRequest("POST", LoginURL, strings.NewReader(uv.Encode()))
+	req.Header.Set("Cache-Control", "max-age=0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Encoding", "deflate, br")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return resp, err
+	}
+	return resp, nil
+}
 func GetLogin(client http.Client) error {
 
-	var Response LogResponse
-	LoginURL := config.AquareaServiceCloudURL + "/installer/api/auth/login"
+	var Response GetLoginStruct
+	LoginURL := config.AquareaServiceCloudURL + "installer/api/auth/login"
 	data := []byte(config.AquareaServiceCloudLogin + config.AquareaServiceCloudPassword)
-	resp, err := client.PostForm(LoginURL, url.Values{
+
+	uv := url.Values{
 		"var.loginId":         {config.AquareaServiceCloudLogin},
 		"var.password":        {fmt.Sprintf("%x", md5.Sum(data))},
 		"var.inputOmit":       {"false"},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
-	})
+	}
+
+	resp, err := PostREQ(LoginURL, client, uv)
 	if err != nil {
-		fmt.Println(err)
 		return err
 
 	}
 	b, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
+
 		fmt.Println(err)
 		return err
 
 	}
+	fmt.Println(string(b))
 	defer resp.Body.Close()
 
 	err = json.Unmarshal(b, &Response)
-	if len(Response.Message) > 0 {
-		if Response.Message[0].ErrorCode != "0" {
-			err = errors.New(Response.Message[0].ErrorMessage)
+	fmt.Println(err, "tooooo", string(b))
 
-		}
+	if Response.ErrorCode != 0 {
+		err = errors.New(fmt.Sprintf("d", Response.ErrorCode))
+
 	}
 
 	if err != nil {
@@ -573,7 +631,19 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 	var m map[string]string
 
 	var Shiesuahruefutohkun string
-	resp, err := client.Get(config.AquareaServiceCloudURL + "installer/home")
+	req, err := http.NewRequest("GET", config.AquareaServiceCloudURL+"installer/home", nil)
+	if err != nil {
+		log.Fatal("Error reading request. ", err)
+	}
+
+	req.Header.Set("Cache-Control", "max-age=0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Encoding", "deflate, br")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+
+	resp, err := client.Do(req)
+
 	if err != nil {
 		return err, EndUsers, m
 
@@ -590,6 +660,7 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 
 		result := strings.Replace(ss33[1], "\\", "", -1)
 		err = json.Unmarshal([]byte(result), &m)
+		fmt.Println(err, "tutaj", result)
 
 	}
 
@@ -601,7 +672,8 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 	resp.Body.Close()
 
 	LoginURL := config.AquareaServiceCloudURL + "/installer/api/endusers"
-	resp, err = client.PostForm(LoginURL, url.Values{
+
+	req, err = http.NewRequest("POST", LoginURL, strings.NewReader(url.Values{
 		"var.name":            {""},
 		"var.deviceId":        {""},
 		"var.idu":             {""},
@@ -614,7 +686,16 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 		"var.mapSizeY":        {"0"},
 		"var.readNew":         {"1"},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
-	})
+	}.Encode()))
+	req.Header.Set("Cache-Control", "max-age=0")
+	req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:74.0) Gecko/20100101 Firefox/74.0")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8")
+	req.Header.Set("Accept-Encoding", "deflate, br")
+	req.Header.Set("Upgrade-Insecure-Requests", "1")
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err = client.Do(req)
+
 	if err != nil {
 		return err, EndUsers, m
 	}
@@ -624,6 +705,7 @@ func GetInstallerHome(client http.Client) (error, []Enduser, map[string]string) 
 	}
 	err = json.Unmarshal(b, &EndUsersList)
 	if err != nil {
+		fmt.Println(err, string(b))
 		return err, EndUsers, m
 	}
 	EndUsers = EndUsersList.Endusers
@@ -642,10 +724,11 @@ func GetDeviceInformation(client http.Client, eu Enduser) (error, AquareaStatusR
 	var AquareaStatusResponse AquareaStatusResponse
 
 	LoginURL := config.AquareaServiceCloudURL + "/installer/api/function/status"
-	resp, err := client.PostForm(LoginURL, url.Values{
+	uv := url.Values{
 		"var.deviceId":        {eu.DeviceID},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
-	})
+	}
+	resp, err := PostREQ(LoginURL, client, uv)
 	if err != nil {
 		return err, AquareaStatusResponse
 
@@ -660,6 +743,7 @@ func GetDeviceInformation(client http.Client, eu Enduser) (error, AquareaStatusR
 	//fmt.Println(SB)
 	//fmt.Println("\n")
 	err = json.Unmarshal([]byte(SB), &AquareaStatusResponse)
+	fmt.Println(err, SB)
 
 	//fmt.Println(AquareaStatusResponse.StatusDataInfo.FunctionStatusText027.Value)
 	resp.Body.Close()
@@ -689,13 +773,14 @@ func GetDeviceLogInformation(client http.Client, eu Enduser) (error, int64, []st
 	lsec := sec - config.LogSecOffset
 	ValueList := "{\"logItems\":[0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59,60,61,62,63,64,65,66,67,68,69,70]}"
 	LoginURL := config.AquareaServiceCloudURL + "/installer/api/data/log"
-	resp, err := client.PostForm(LoginURL, url.Values{
+	uv := url.Values{
 		"var.deviceId":        {eu.DeviceID},
 		"shiesuahruefutohkun": {Shiesuahruefutohkun},
 		"var.target":          {"0"},
 		"var.startDate":       {fmt.Sprintf("%d000", lsec)},
 		"var.logItems":        {ValueList},
-	})
+	}
+	resp, err := PostREQ(LoginURL, client, uv)
 	if err != nil {
 		return err, sec, respo
 
@@ -706,8 +791,12 @@ func GetDeviceLogInformation(client http.Client, eu Enduser) (error, int64, []st
 
 	}
 	err = json.Unmarshal(b, &AQLogData)
+	fmt.Println(err, b)
+
 	var anything map[int64][]string
 	err = json.Unmarshal([]byte(AQLogData.LogData), &anything)
+	fmt.Println(err, AQLogData.LogData)
+
 	if len(anything) < 1 {
 		return nil, sec, respo
 
@@ -721,8 +810,8 @@ func GetDeviceLogInformation(client http.Client, eu Enduser) (error, int64, []st
 
 	lastkey := len(keys) - 1
 
-	//fmt.Println(keys, "\n")
-	//fmt.Println(keys[lastkey])
+	fmt.Println(keys, "\n")
+	fmt.Println(keys[lastkey])
 
 	respo = anything[keys[lastkey]]
 	resp.Body.Close()
