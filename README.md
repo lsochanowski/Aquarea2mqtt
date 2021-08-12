@@ -109,3 +109,5 @@ TODO:
 	
 	- writing some other parameters (tank temperature etc) 
 	
+	
+for people trying to contact me : lukasz.sochanowski@gmail.com
